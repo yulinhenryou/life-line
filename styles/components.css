@@ -1,0 +1,461 @@
+.icon-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.34);
+  transition: opacity 180ms ease, transform 180ms ease, background 180ms ease;
+}
+
+.icon-button.is-busy {
+  opacity: 0.58;
+  pointer-events: none;
+}
+
+.icon-button:hover,
+.icon-button.is-active,
+.add-map-button:hover,
+.back-world:hover {
+  background: rgba(255, 255, 255, 0.82);
+  transform: translateY(-1px);
+}
+
+.icon-button::after,
+.add-map-button::after,
+.back-world::after,
+.visit-add::after,
+.card-action::after {
+  display: none;
+}
+
+.projection-toggle .icon-button::after,
+.add-map-button::after {
+  left: auto;
+  right: 0;
+  transform: translate(0, 4px);
+}
+
+.projection-toggle .icon-button:hover::after,
+.add-map-button:hover::after {
+  transform: translate(0, 0);
+}
+
+.routes-toggle .icon-button::after,
+.back-world::after {
+  left: 0;
+  transform: translate(0, 4px);
+}
+
+.routes-toggle .icon-button:hover::after,
+.back-world:hover::after {
+  transform: translate(0, 0);
+}
+
+.icon-button:hover::after,
+.add-map-button:hover::after,
+.back-world:hover::after,
+.visit-add:hover::after,
+.card-action:hover::after {
+  display: none;
+}
+
+.flat-icon,
+.globe-icon,
+.back-world-icon,
+.route-icon {
+  display: block;
+  width: 19px;
+  height: 19px;
+}
+
+.flat-icon {
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+}
+
+.globe-icon,
+.back-world-icon {
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+}
+
+.globe-icon::before,
+.back-world-icon::before {
+  content: "";
+  display: block;
+  width: 2px;
+  height: 100%;
+  margin: 0 auto;
+  background: rgba(31, 38, 48, 0.42);
+}
+
+.route-icon {
+  position: relative;
+}
+
+.route-icon::before,
+.route-icon::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  background: var(--ink);
+}
+
+.route-footprint::before {
+  left: 4px;
+  top: 4px;
+  width: 11px;
+  height: 11px;
+  background: transparent;
+  border: 2px solid var(--ink);
+}
+
+.route-footprint::after {
+  left: 7px;
+  top: 7px;
+  width: 5px;
+  height: 5px;
+  opacity: 0.55;
+}
+
+.route-hidden::before {
+  left: 4px;
+  top: 8px;
+  width: 12px;
+  height: 2px;
+  transform: rotate(-38deg);
+}
+
+.route-hidden::after {
+  left: 4px;
+  top: 8px;
+  width: 12px;
+  height: 2px;
+  transform: rotate(38deg);
+}
+
+.route-line::before,
+.route-simple::before {
+  left: 2px;
+  top: 9px;
+  width: 15px;
+  height: 2px;
+  transform: rotate(-18deg);
+}
+
+.route-journeys::before,
+.route-full::before {
+  left: 1px;
+  top: 6px;
+  width: 17px;
+  height: 2px;
+  transform: rotate(-20deg);
+}
+
+.route-journeys::after,
+.route-full::after {
+  left: 1px;
+  top: 13px;
+  width: 17px;
+  height: 2px;
+  transform: rotate(18deg);
+}
+
+.city-card {
+  position: absolute;
+  right: var(--edge);
+  top: 50%;
+  z-index: var(--z-card);
+  width: fit-content;
+  min-width: 214px;
+  max-width: min(310px, calc(100vw - (var(--edge) * 2)));
+  padding: 14px;
+  border-radius: 22px;
+  opacity: 0;
+  transform: translate(14px, -50%);
+  transition: opacity 220ms ease, transform 220ms ease;
+  contain: layout paint;
+}
+
+.city-card.is-visible {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+.city-card-inner {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.city-card-copy {
+  min-width: 0;
+  max-width: 188px;
+  padding-right: var(--space-1);
+}
+
+.city-card-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-2);
+}
+
+.city-card h2,
+.side-panel h2 {
+  margin: 0;
+  font-size: 1.22rem;
+  line-height: 1.08;
+}
+
+.city-card h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.city-card p,
+.panel-muted {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 650;
+  line-height: 1.28;
+}
+
+.panel-muted {
+  margin-bottom: var(--space-3);
+}
+
+.city-card p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visit-add,
+.card-action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.66);
+  color: var(--ink);
+  font-size: 1.1rem;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.visit-add:hover,
+.card-action:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+
+.panel-close {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.side-panel {
+  position: absolute;
+  right: var(--edge);
+  top: clamp(84px, 9vh, 108px);
+  max-height: calc(100vh - clamp(112px, 15vh, 152px));
+  z-index: var(--z-panel);
+  width: clamp(320px, 36vw, 430px);
+  max-width: calc(100vw - (var(--edge) * 2));
+  padding: var(--space-6);
+  border-radius: var(--radius-panel);
+  overflow: auto;
+  overscroll-behavior: contain;
+  opacity: 0;
+  transform: translateX(16px);
+  transition: opacity 220ms ease, transform 220ms ease;
+  contain: layout paint;
+}
+
+.side-panel.is-visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.panel-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  margin: var(--space-5) 0 var(--space-4);
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.panel-tabs button,
+.generate-button {
+  min-height: 42px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.48);
+  font-weight: 760;
+}
+
+.panel-tabs button.is-active,
+.generate-button {
+  color: #fff;
+  background: var(--blue-deep);
+}
+
+.template-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.template-form label {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.template-form input,
+.template-form textarea,
+.template-form select {
+  min-height: 42px;
+  padding: 10px var(--space-3);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), inset 0 -10px 18px rgba(91, 104, 112, 0.035);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+details {
+  padding: var(--space-3);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.36);
+  transition: background 180ms ease;
+}
+
+summary {
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 760;
+}
+
+details label {
+  margin-top: var(--space-3);
+}
+
+.template-output-wrap {
+  position: relative;
+  margin-top: var(--space-4);
+  min-width: 0;
+}
+
+.copy-template {
+  position: absolute;
+  right: 9px;
+  top: 9px;
+  z-index: 1;
+  min-width: 58px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 0.72rem;
+  font-weight: 760;
+}
+
+.template-output {
+  min-height: 110px;
+  max-height: 32vh;
+  margin: 0;
+  padding: 44px 14px 14px;
+  overflow: auto;
+  border-radius: 18px;
+  color: #2c3b47;
+  background: rgba(255, 255, 255, 0.54);
+  white-space: pre;
+  overflow-wrap: normal;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+.add-guide {
+  margin: 0 0 var(--space-4);
+}
+
+.add-guide[open] {
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.add-guide ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.38;
+}
+
+.add-guide li {
+  overflow-wrap: anywhere;
+}
+
+.back-world,
+.add-map-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.plus-icon {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.plus-icon::before,
+.plus-icon::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.plus-icon::before {
+  width: 18px;
+  height: 2px;
+}
+
+.plus-icon::after {
+  width: 2px;
+  height: 18px;
+}
