@@ -1,4 +1,15 @@
 (function () {
+  const PERFORMANCE_LAYER_IDS = [
+    "atlas-land-warmth",
+    "visited-countries-light",
+    "visited-countries-halo",
+    "routes-simple-shadow",
+    "routes-simple-glow",
+    "routes-full-shadow",
+    "routes-full",
+    "places-glow"
+  ];
+
   async function init() {
     const state = window.LifelineState;
     const config = window.LifelineConfig;
@@ -15,6 +26,7 @@
       bearing: config.worldView.bearing,
       maxZoom: config.maxZoom,
       minZoom: 0.75,
+      fadeDuration: 0,
       attributionControl: false,
       renderWorldCopies: false,
       maxBounds: config.panBounds
@@ -28,6 +40,7 @@
       addSourcesAndLayers();
       bindMapInteractions();
       bindIntroInterrupts();
+      bindInteractionPerformanceMode();
       bindPacificCameraClamp();
       updateRoutes();
       state.projection = "flat";
@@ -338,6 +351,7 @@
       updateCountryPaint();
     });
     map.on("mousemove", "visited-countries-fill", (event) => {
+      if (window.LifelineState.isInteractionLight) return;
       const placeHit = map.queryRenderedFeatures(event.point, { layers: placeLayers });
       if (placeHit.length) {
         if (window.LifelineState.hoverCountryId) {
@@ -362,7 +376,7 @@
         if (window.LifelineState.routeMode !== "footprint") map.getCanvas().style.cursor = "pointer";
       });
       map.on("mousemove", layerId, (event) => {
-        if (window.LifelineState.routeMode === "footprint") return;
+        if (window.LifelineState.isInteractionLight || window.LifelineState.routeMode === "footprint") return;
         setHoveredPlace(event.features[0].properties.id);
       });
       map.on("mouseleave", layerId, () => {
@@ -371,13 +385,45 @@
       });
     });
     map.on("mousemove", "routes-full-core", (event) => {
-      if (window.LifelineState.routeMode !== "journeys") return;
+      if (window.LifelineState.isInteractionLight || window.LifelineState.routeMode !== "journeys") return;
       const props = event.features[0].properties;
       setHoveredRoute(event.features[0].id);
     });
     map.on("mouseleave", "routes-full-core", () => {
       setHoveredRoute("");
     });
+  }
+
+  function bindInteractionPerformanceMode() {
+    const map = window.LifelineState.map;
+    ["dragstart", "rotatestart", "pitchstart", "zoomstart"].forEach((eventName) => {
+      map.on(eventName, () => setInteractionLightMode(true));
+    });
+    ["dragend", "rotateend", "pitchend", "zoomend", "moveend"].forEach((eventName) => {
+      map.on(eventName, () => setInteractionLightMode(false));
+    });
+  }
+
+  function setInteractionLightMode(enabled) {
+    const state = window.LifelineState;
+    const map = state.map;
+    if (!map || state.isInteractionLight === enabled) return;
+    state.isInteractionLight = enabled;
+    PERFORMANCE_LAYER_IDS.forEach((layerId) => {
+      if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", enabled ? "none" : "visible");
+    });
+    if (map.getLayer("carto-base")) {
+      map.setPaintProperty("carto-base", "raster-opacity", enabled ? 0 : globeAwareRasterOpacity());
+    }
+    if (!enabled) {
+      setHoveredPlace("");
+      setHoveredRoute("");
+      updateModePaint();
+    }
+  }
+
+  function globeAwareRasterOpacity() {
+    return window.LifelineState.projection === "globe" ? 0.006 : 0.016;
   }
 
   function bindPacificCameraClamp() {
@@ -489,7 +535,7 @@
   async function runProjectionTransition(mode, token) {
     const state = window.LifelineState;
     const type = mode === "globe" ? "globe" : "mercator";
-    const targetZoom = mode === "globe" ? 1.35 : window.LifelineConfig.worldView.zoom;
+    const targetView = mode === "globe" ? window.LifelineConfig.globeView : window.LifelineConfig.worldView;
     window.LifelinePanels.closeCityCard();
     document.querySelector("#back-world").hidden = true;
     state.focusCountryId = "";
@@ -511,8 +557,8 @@
     await waitForIdleOrTimeout(260);
     if (token !== state.motionId) return finishProjectionTransition(mode);
     await animateTo({
-      center: window.LifelineConfig.worldView.center,
-      zoom: targetZoom,
+      center: targetView.center,
+      zoom: targetView.zoom,
       pitch: 0,
       bearing: 0,
       duration: motionDuration(780)
@@ -665,8 +711,9 @@
     const map = state.map;
     if (!map || !map.getLayer("carto-base")) return;
     if (state.projection === "globe") {
-    map.setPaintProperty("background", "background-color", "#326f7f");
-    map.setPaintProperty("carto-base", "raster-opacity", 0.018);
+      map.setPaintProperty("background", "background-color", "#326f7f");
+      map.setLayoutProperty("carto-base", "visibility", "none");
+      map.setPaintProperty("carto-base", "raster-opacity", 0);
       map.setPaintProperty("carto-base", "raster-saturation", -0.78);
       map.setPaintProperty("carto-base", "raster-contrast", -0.02);
       map.setPaintProperty("carto-base", "raster-brightness-min", 0.1);
@@ -680,7 +727,8 @@
       return;
     }
     map.setPaintProperty("background", "background-color", "#5f9dad");
-    map.setPaintProperty("carto-base", "raster-opacity", 0.016);
+    map.setLayoutProperty("carto-base", "visibility", "visible");
+    map.setPaintProperty("carto-base", "raster-opacity", state.isInteractionLight ? 0 : globeAwareRasterOpacity());
     map.setPaintProperty("carto-base", "raster-saturation", -0.86);
     map.setPaintProperty("carto-base", "raster-contrast", -0.2);
     map.setPaintProperty("carto-base", "raster-brightness-min", 0.14);

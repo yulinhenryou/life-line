@@ -33,6 +33,12 @@
       pitch: 0,
       bearing: 0
     },
+    globeView: {
+      center: [160, 8],
+      zoom: 1.68,
+      pitch: 0,
+      bearing: 0
+    },
     panBounds: [
       [-40.25, -72],
       [319.5, 82]
