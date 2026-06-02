@@ -49,21 +49,52 @@
   pointer-events: auto;
 }
 
-.eyebrow {
-  margin: 0 0 8px;
-  color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+.brand-mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: clamp(1.24rem, 1.9vw, 1.72rem);
+  font-weight: 780;
+  line-height: 1;
+  letter-spacing: 0.095em;
+  overflow: hidden;
 }
 
-.topbar h1 {
-  margin: 0;
-  color: var(--ink);
-  font-size: clamp(1.55rem, 2.6vw, 2.35rem);
-  font-weight: 780;
-  line-height: 0.95;
+.brand-mark::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0.095em;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(17, 24, 39, 0.5), rgba(27, 120, 154, 0.22), transparent);
+  transform: scaleX(0.74);
+  transform-origin: left;
+}
+
+.brand-mark::after {
+  content: "";
+  position: absolute;
+  inset: -20% -35%;
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.78) 50%, transparent 70%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+
+.app-shell.is-intro .brand-mark::after {
+  animation: brandSweep 840ms ease 560ms forwards;
+}
+
+@keyframes brandSweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
 }
 
 .place-card {
