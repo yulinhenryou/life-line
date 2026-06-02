@@ -3,66 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="LIFELINE is a minimal personal interactive map artwork." />
+    <meta name="description" content="LIFELINE is a personal map of places visited across a lifetime." />
     <title>LIFELINE</title>
     <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css" />
-    <link rel="stylesheet" href="styles/base.css?v=lifeline-30" />
-    <link rel="stylesheet" href="styles/layout.css?v=lifeline-30" />
-    <link rel="stylesheet" href="styles/map.css?v=lifeline-30" />
-    <link rel="stylesheet" href="styles/components.css?v=lifeline-30" />
-    <link rel="stylesheet" href="styles/responsive.css?v=lifeline-30" />
+    <link rel="stylesheet" href="styles/base.css?v=lifeline-v2" />
+    <link rel="stylesheet" href="styles/layout.css?v=lifeline-v2" />
+    <link rel="stylesheet" href="styles/map.css?v=lifeline-v2" />
+    <link rel="stylesheet" href="styles/components.css?v=lifeline-v2" />
+    <link rel="stylesheet" href="styles/responsive.css?v=lifeline-v2" />
   </head>
   <body>
-    <main class="lifeline-shell is-intro" id="lifeline-shell">
-      <div id="map" class="map-canvas" aria-label="LIFELINE interactive map"></div>
-      <div class="map-loading" id="map-loading">Loading map</div>
+    <main class="app-shell is-intro" id="app-shell">
+      <div class="map-stage">
+        <div id="map" class="map-canvas" aria-label="LIFELINE world map"></div>
+        <div class="origin-pulse" id="origin-pulse" aria-hidden="true"></div>
+      </div>
 
-      <header class="brand-corner" aria-label="LIFELINE">
-        <h1>LIFELINE</h1>
+      <header class="topbar" aria-label="LIFELINE">
+        <div>
+          <p class="eyebrow">Personal Atlas</p>
+          <h1>LIFELINE</h1>
+        </div>
+        <button class="icon-control" id="reset-view" type="button" aria-label="Reset world view" title="Reset view">
+          <span aria-hidden="true"></span>
+        </button>
       </header>
 
-      <section class="projection-toggle glass-panel" aria-label="Map projection">
-        <button class="icon-button is-active" type="button" data-projection="flat" aria-label="Flat">
-          <span class="flat-icon" aria-hidden="true"></span>
-        </button>
-        <button class="icon-button" type="button" data-projection="globe" aria-label="Globe">
-          <span class="globe-icon" aria-hidden="true"></span>
-        </button>
+      <aside class="place-card" id="place-card" aria-live="polite" hidden></aside>
+
+      <section class="map-status" id="map-status" aria-live="polite">
+        <span>Loading map</span>
       </section>
-
-      <section class="routes-toggle glass-panel" aria-label="Route mode">
-        <button class="icon-button is-active" type="button" data-route-mode="footprint" aria-label="Footprint">
-          <span class="route-icon route-footprint" aria-hidden="true"></span>
-        </button>
-        <button class="icon-button" type="button" data-route-mode="line" aria-label="Line">
-          <span class="route-icon route-line" aria-hidden="true"></span>
-        </button>
-        <button class="icon-button" type="button" data-route-mode="journeys" aria-label="Journeys">
-          <span class="route-icon route-journeys" aria-hidden="true"></span>
-        </button>
-      </section>
-
-      <button class="back-world glass-panel" id="back-world" type="button" aria-label="Back to World" hidden>
-        <span class="back-world-icon" aria-hidden="true"></span>
-      </button>
-
-      <button class="add-map-button glass-panel" id="add-map" type="button" aria-label="Add to Map">
-        <span class="plus-icon" aria-hidden="true"></span>
-      </button>
-
-      <aside class="city-card glass-panel" id="city-card" aria-live="polite" hidden></aside>
-      <aside class="side-panel glass-panel" id="add-panel" aria-label="Add to Map" hidden></aside>
-      <aside class="side-panel glass-panel" id="visit-panel" aria-label="Add Visit" hidden></aside>
     </main>
 
     <script src="vendor/maplibre/maplibre-gl.js"></script>
-    <script src="data/places.js?v=lifeline-30"></script>
-    <script src="data/journeys.js?v=lifeline-30"></script>
-    <script src="src/config.js?v=lifeline-30"></script>
-    <script src="src/helpers.js?v=lifeline-30"></script>
-    <script src="src/routes.js?v=lifeline-30"></script>
-    <script src="src/panels.js?v=lifeline-30"></script>
-    <script src="src/map.js?v=lifeline-30"></script>
-    <script src="src/main.js?v=lifeline-30"></script>
+    <script src="data/places.js?v=lifeline-v2"></script>
+    <script src="src/config.js?v=lifeline-v2"></script>
+    <script src="src/helpers.js?v=lifeline-v2"></script>
+    <script src="src/map.js?v=lifeline-v2"></script>
+    <script src="src/main.js?v=lifeline-v2"></script>
   </body>
 </html>

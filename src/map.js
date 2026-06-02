@@ -1,53 +1,46 @@
 (function () {
-  const PERFORMANCE_LAYER_IDS = [
-    "atlas-land-warmth",
-    "visited-countries-light",
-    "visited-countries-halo",
-    "routes-simple-shadow",
-    "routes-simple-glow",
-    "routes-full-shadow",
-    "routes-full",
-    "places-glow"
-  ];
+  const SOURCE_IDS = {
+    world: "world-countries",
+    visited: "visited-countries",
+    places: "places"
+  };
 
   async function init() {
     const state = window.LifelineState;
     const config = window.LifelineConfig;
+
     state.worldCountries = await fetchJson("data/geo/world-countries.geojson");
-    state.countries = await fetchJson("data/geo/countries.geojson");
-    state.adminRegions = await fetchJson("data/geo/admin-regions.geojson");
+    state.visitedCountries = await fetchJson("data/geo/countries.geojson");
 
     state.map = new maplibregl.Map({
       container: "map",
       style: config.mapStyle,
-      center: config.worldView.center,
-      zoom: config.worldView.zoom,
-      pitch: config.worldView.pitch,
-      bearing: config.worldView.bearing,
+      center: config.introView.center,
+      zoom: config.introView.zoom,
+      pitch: 0,
+      bearing: 0,
+      minZoom: config.minZoom,
       maxZoom: config.maxZoom,
-      minZoom: 0.75,
-      fadeDuration: 0,
+      maxBounds: config.bounds,
       attributionControl: false,
       renderWorldCopies: false,
-      maxBounds: config.panBounds
+      fadeDuration: 0
     });
+
+    state.map.dragRotate.disable();
+    state.map.touchZoomRotate.disableRotation();
+    state.map.keyboard.disableRotation();
 
     state.map.on("error", (event) => {
       console.warn("LIFELINE map warning", event && event.error ? event.error : event);
     });
 
-    state.map.on("load", () => {
-      addSourcesAndLayers();
-      bindMapInteractions();
-      bindIntroInterrupts();
-      bindInteractionPerformanceMode();
-      bindPacificCameraClamp();
-      updateRoutes();
-      state.projection = "flat";
-      state.map.setProjection({ type: "mercator" });
-      runIntroSequence();
-      document.querySelector("#map-loading").classList.add("is-hidden");
-    });
+    await onceMapEvent(state.map, "load");
+    addSources();
+    addLayers();
+    bindMapEvents();
+    positionOriginPulse();
+    runIntro();
   }
 
   async function fetchJson(path) {
@@ -56,869 +49,366 @@
     return response.json();
   }
 
-  function addSourcesAndLayers() {
-    const state = window.LifelineState;
-    const map = state.map;
-    map.addSource("world-countries", { type: "geojson", data: projectedCollection(state.worldCountries) });
-    map.addSource("visited-countries", { type: "geojson", data: visitedCountriesCollection() });
-    map.addSource("admin-regions", { type: "geojson", data: emptyCollection() });
-    map.addSource("places", { type: "geojson", data: placesCollection() });
-    map.addSource("routes-simple", { type: "geojson", data: emptyCollection(), lineMetrics: true });
-    map.addSource("routes-full", { type: "geojson", data: emptyCollection(), lineMetrics: true });
-
-    map.addLayer({
-      id: "atlas-land-fill",
-      type: "fill",
-      source: "world-countries",
-      paint: {
-        "fill-color": "#f1dfb8",
-        "fill-antialias": true,
-        "fill-opacity": 0.98,
-        "fill-opacity-transition": { duration: 260, delay: 0 }
-      }
-    });
-    map.addLayer({
-      id: "atlas-land-warmth",
-      type: "fill",
-      source: "world-countries",
-      paint: {
-        "fill-color": "#fff0bd",
-        "fill-antialias": true,
-        "fill-opacity": 0.24,
-        "fill-opacity-transition": { duration: 260, delay: 0 }
-      }
-    });
-    map.addLayer({
-      id: "atlas-country-line",
-      type: "line",
-      source: "world-countries",
-      paint: {
-        "line-color": "rgba(89, 78, 54, 0.44)",
-        "line-opacity": 0.16,
-        "line-width": 0.38,
-        "line-blur": 0.12,
-        "line-opacity-transition": { duration: 240, delay: 0 }
-      }
-    });
-    map.addLayer({
-      id: "visited-countries-fill",
-      type: "fill",
-      source: "visited-countries",
-      paint: {
-        "fill-color": window.LifelineConfig.colors.visitedFill,
-        "fill-antialias": true,
-        "fill-opacity": countryFillOpacity(),
-        "fill-opacity-transition": { duration: 220, delay: 0 }
-      }
-    });
-    map.addLayer({
-      id: "visited-countries-light",
-      type: "fill",
-      source: "visited-countries",
-      paint: {
-        "fill-color": "rgba(255, 246, 215, 0.64)",
-        "fill-antialias": true,
-        "fill-opacity": countryLightOpacity(),
-        "fill-opacity-transition": { duration: 260, delay: 0 }
-      }
-    });
-    map.addLayer({
-      id: "visited-countries-halo",
-      type: "line",
-      source: "visited-countries",
-      paint: {
-        "line-color": window.LifelineConfig.colors.visitedHalo,
-        "line-opacity": countryHaloOpacity(),
-        "line-width": countryHaloWidth(),
-        "line-blur": 1.2,
-        "line-opacity-transition": { duration: 260, delay: 0 },
-        "line-width-transition": { duration: 220, delay: 0 }
-      }
-    });
-    map.addLayer({
-      id: "visited-countries-line",
-      type: "line",
-      source: "visited-countries",
-      paint: {
-        "line-color": window.LifelineConfig.colors.visitedLine,
-        "line-opacity": countryLineOpacity(),
-        "line-width": countryLineWidth(),
-        "line-blur": 0.25,
-        "line-opacity-transition": { duration: 220, delay: 0 },
-        "line-width-transition": { duration: 180, delay: 0 }
-      }
-    });
-    map.addLayer({
-      id: "admin-regions-fill",
-      type: "fill",
-      source: "admin-regions",
-      paint: {
-        "fill-color": window.LifelineConfig.colors.focusedFill,
-        "fill-antialias": true,
-        "fill-opacity": 0.17,
-        "fill-opacity-transition": { duration: 220, delay: 0 }
-      }
-    });
-    map.addLayer({
-      id: "admin-regions-line",
-      type: "line",
-      source: "admin-regions",
-      paint: {
-        "line-color": window.LifelineConfig.colors.focusedLine,
-        "line-opacity": 0.42,
-        "line-width": 1.05,
-        "line-blur": 0.2,
-        "line-opacity-transition": { duration: 220, delay: 0 }
-      }
-    });
-    addRouteLayers();
-    addPlaceLayers();
-  }
-
-  function addRouteLayers() {
+  function addSources() {
     const map = window.LifelineState.map;
-    map.addLayer({
-      id: "routes-simple-shadow",
-      type: "line",
-      source: "routes-simple",
-      paint: {
-        "line-color": window.LifelineConfig.colors.routeShadow,
-        "line-width": 5.4,
-        "line-opacity": 0,
-        "line-blur": 0.55,
-        "line-gradient": routeGradient(window.LifelineConfig.colors.routeShadow, 1),
-        "line-opacity-transition": { duration: 420, delay: 0 }
-      }
+    map.addSource(SOURCE_IDS.world, {
+      type: "geojson",
+      data: simplifyCollection(window.LifelineState.worldCountries, 0.06)
     });
-    map.addLayer({
-      id: "routes-simple-glow",
-      type: "line",
-      source: "routes-simple",
-      paint: {
-        "line-color": window.LifelineConfig.colors.routeGlow,
-        "line-width": ["coalesce", ["get", "routeGlowWidth"], 8],
-        "line-opacity": 0.44,
-        "line-gradient": routeGradient(window.LifelineConfig.colors.routeGlow, 1),
-        "line-opacity-transition": { duration: 420, delay: 0 }
-      }
+    map.addSource(SOURCE_IDS.visited, {
+      type: "geojson",
+      data: visitedCountriesCollection()
     });
-    map.addLayer({
-      id: "routes-simple",
-      type: "line",
-      source: "routes-simple",
-      paint: {
-        "line-color": window.LifelineConfig.colors.route,
-        "line-width": ["coalesce", ["get", "routeWidth"], 2],
-        "line-opacity": 0.9,
-        "line-gradient": routeGradient(window.LifelineConfig.colors.route, 1),
-        "line-opacity-transition": { duration: 420, delay: 0 }
-      }
-    });
-    map.addLayer({
-      id: "routes-full-shadow",
-      type: "line",
-      source: "routes-full",
-      paint: {
-        "line-color": window.LifelineConfig.colors.routeShadow,
-        "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 5.2, ["+", ["coalesce", ["get", "routeGlowWidth"], 3.1], 1.4]],
-        "line-opacity": routeFullShadowOpacity(),
-        "line-blur": 0.75,
-        "line-gradient": routeGradient(window.LifelineConfig.colors.routeShadow, 1),
-        "line-opacity-transition": { duration: 420, delay: 0 },
-        "line-width-transition": { duration: 180, delay: 0 }
-      }
-    });
-    map.addLayer({
-      id: "routes-full",
-      type: "line",
-      source: "routes-full",
-      paint: {
-        "line-color": window.LifelineConfig.colors.routeGlow,
-        "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 6.2, ["coalesce", ["get", "routeGlowWidth"], 3.8]],
-        "line-opacity": routeFullGlowOpacity(),
-        "line-blur": 1.1,
-        "line-gradient": routeGradient(window.LifelineConfig.colors.routeGlow, 1),
-        "line-opacity-transition": { duration: 420, delay: 0 },
-        "line-width-transition": { duration: 180, delay: 0 }
-      }
-    });
-    map.addLayer({
-      id: "routes-full-core",
-      type: "line",
-      source: "routes-full",
-      paint: {
-        "line-color": window.LifelineConfig.colors.route,
-        "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 2.4, ["coalesce", ["get", "routeWidth"], 1.35]],
-        "line-opacity": routeFullOpacity(),
-        "line-gradient": routeGradient(window.LifelineConfig.colors.route, 1),
-        "line-opacity-transition": { duration: 420, delay: 0 },
-        "line-width-transition": { duration: 180, delay: 0 }
-      }
+    map.addSource(SOURCE_IDS.places, {
+      type: "geojson",
+      data: placesCollection()
     });
   }
 
-  function addPlaceLayers() {
+  function addLayers() {
     const map = window.LifelineState.map;
+    const colors = window.LifelineConfig.colors;
+
     map.addLayer({
-      id: "places-glow",
-      type: "circle",
-      source: "places",
+      id: "land-fill",
+      type: "fill",
+      source: SOURCE_IDS.world,
       paint: {
-        "circle-radius": placeGlowRadius(),
-        "circle-color": window.LifelineConfig.colors.pointGlow,
-        "circle-opacity": 0.78,
-        "circle-blur": 0.7,
-        "circle-opacity-transition": { duration: 420, delay: 0 }
+        "fill-color": colors.land,
+        "fill-opacity": 0.88
       }
     });
+
     map.addLayer({
-      id: "places-dot",
+      id: "land-outline",
+      type: "line",
+      source: SOURCE_IDS.world,
+      paint: {
+        "line-color": colors.landLine,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.42, 4, 0.72],
+        "line-opacity": 0.86
+      }
+    });
+
+    map.addLayer({
+      id: "visited-fill",
+      type: "fill",
+      source: SOURCE_IDS.visited,
+      paint: {
+        "fill-color": colors.visitedFill,
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.52, 4, 0.34]
+      }
+    });
+
+    map.addLayer({
+      id: "visited-outline",
+      type: "line",
+      source: SOURCE_IDS.visited,
+      paint: {
+        "line-color": colors.visitedLine,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.85, 4, 1.2],
+        "line-opacity": 0.82
+      }
+    });
+
+    map.addLayer({
+      id: "place-halo",
       type: "circle",
-      source: "places",
+      source: SOURCE_IDS.places,
+      paint: {
+        "circle-radius": placeHaloRadius(),
+        "circle-color": ["case", ["get", "origin"], "rgba(17, 24, 39, 0.16)", "rgba(27, 120, 154, 0.14)"],
+        "circle-opacity": introOpacity(),
+        "circle-blur": 0.55
+      }
+    });
+
+    map.addLayer({
+      id: "place-dot",
+      type: "circle",
+      source: SOURCE_IDS.places,
       paint: {
         "circle-radius": placeDotRadius(),
-        "circle-color": window.LifelineConfig.colors.point,
-        "circle-stroke-color": window.LifelineConfig.colors.pointRing,
-        "circle-stroke-width": 1.75,
-        "circle-stroke-opacity": 1,
-        "circle-opacity": 1,
-        "circle-opacity-transition": { duration: 420, delay: 0 },
-        "circle-stroke-opacity-transition": { duration: 420, delay: 0 }
+        "circle-color": ["case", ["get", "origin"], colors.origin, colors.pointVisited],
+        "circle-stroke-color": colors.point,
+        "circle-stroke-width": ["case", ["get", "origin"], 2.1, 1.65],
+        "circle-opacity": introOpacity(),
+        "circle-stroke-opacity": introOpacity()
       }
     });
+
     map.addLayer({
-      id: "places-label-high",
+      id: "place-label",
       type: "symbol",
-      source: "places",
-      filter: ["==", ["get", "labelPriority"], "high"],
+      source: SOURCE_IDS.places,
+      minzoom: 2.3,
       layout: {
-        "text-field": ["get", "displayName"],
+        "text-field": ["get", "label"],
         "text-font": ["Noto Sans Regular"],
-        "text-size": 13,
-        "text-offset": [1.1, 0],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 2.3, 11, 5, 13],
+        "text-offset": [1.05, 0],
         "text-anchor": "left",
         "text-allow-overlap": false
       },
       paint: {
-        "text-color": "#24303b",
-      "text-halo-color": "rgba(255,255,255,0.88)",
-      "text-halo-width": 1.2,
-      "text-opacity": labelHighOpacity(),
-      "text-opacity-transition": { duration: 420, delay: 0 }
+        "text-color": "rgba(23, 35, 48, 0.82)",
+        "text-halo-color": "rgba(248, 250, 252, 0.86)",
+        "text-halo-width": 1.15,
+        "text-opacity": ["*", introOpacity(), ["case", ["get", "origin"], 1, ["interpolate", ["linear"], ["zoom"], 2.3, 0.35, 4.6, 0.88]]]
       }
     });
+
     map.addLayer({
-      id: "places-label-normal",
-      type: "symbol",
-      source: "places",
-      filter: ["!=", ["get", "labelPriority"], "high"],
-      minzoom: 4.5,
-      layout: {
-        "text-field": ["get", "displayName"],
-        "text-font": ["Noto Sans Regular"],
-        "text-size": 13,
-        "text-offset": [1.1, 0],
-        "text-anchor": "left",
-        "text-allow-overlap": false
-      },
-      paint: {
-        "text-color": "#24303b",
-      "text-halo-color": "rgba(255,255,255,0.88)",
-      "text-halo-width": 1.2,
-      "text-opacity": labelNormalOpacity(),
-      "text-opacity-transition": { duration: 420, delay: 0 }
-      }
-    });
-    map.addLayer({
-      id: "places-hit-area",
+      id: "place-hit",
       type: "circle",
-      source: "places",
+      source: SOURCE_IDS.places,
       paint: {
         "circle-radius": 18,
-        "circle-color": "#000000",
+        "circle-color": "rgba(0, 0, 0, 0)",
         "circle-opacity": 0
       }
     });
   }
 
-  function bindMapInteractions() {
+  function bindMapEvents() {
     const map = window.LifelineState.map;
-    const placeLayers = ["places-hit-area", "places-dot"];
-    map.on("mouseenter", "visited-countries-fill", () => (map.getCanvas().style.cursor = "pointer"));
-    map.on("mouseleave", "visited-countries-fill", () => {
-      map.getCanvas().style.cursor = "";
-      window.LifelineState.hoverCountryId = "";
-      updateCountryPaint();
+    map.on("mousemove", "place-hit", (event) => {
+      const feature = event.features && event.features[0];
+      if (!feature) return;
+      setHoverPlace(feature.properties.id);
     });
-    map.on("mousemove", "visited-countries-fill", (event) => {
-      if (window.LifelineState.isInteractionLight) return;
-      const placeHit = map.queryRenderedFeatures(event.point, { layers: placeLayers });
-      if (placeHit.length) {
-        if (window.LifelineState.hoverCountryId) {
-          window.LifelineState.hoverCountryId = "";
-          updateCountryPaint();
-        }
-        return;
-      }
-      const feature = event.features[0];
-      if (window.LifelineState.hoverCountryId !== feature.properties.id) {
-        window.LifelineState.hoverCountryId = feature.properties.id;
-        updateCountryPaint();
-      }
+    map.on("mouseleave", "place-hit", () => {
+      setHoverPlace("");
     });
-    map.on("click", "visited-countries-fill", (event) => focusCountry(event.features[0].properties.id));
-    placeLayers.forEach((layerId) => {
-      map.on("click", layerId, (event) => {
-        if (window.LifelineState.routeMode === "footprint") return;
-        focusPlace(event.features[0].properties.id);
-      });
-      map.on("mouseenter", layerId, () => {
-        if (window.LifelineState.routeMode !== "footprint") map.getCanvas().style.cursor = "pointer";
-      });
-      map.on("mousemove", layerId, (event) => {
-        if (window.LifelineState.isInteractionLight || window.LifelineState.routeMode === "footprint") return;
-        setHoveredPlace(event.features[0].properties.id);
-      });
-      map.on("mouseleave", layerId, () => {
-        map.getCanvas().style.cursor = "";
-        setHoveredPlace("");
-      });
+    map.on("click", "place-hit", (event) => {
+      const feature = event.features && event.features[0];
+      if (!feature) return;
+      showPlace(feature.properties.id);
     });
-    map.on("mousemove", "routes-full-core", (event) => {
-      if (window.LifelineState.isInteractionLight || window.LifelineState.routeMode !== "journeys") return;
-      const props = event.features[0].properties;
-      setHoveredRoute(event.features[0].id);
+    map.on("click", (event) => {
+      const hits = map.queryRenderedFeatures(event.point, { layers: ["place-hit"] });
+      if (!hits.length) hidePlaceCard();
     });
-    map.on("mouseleave", "routes-full-core", () => {
-      setHoveredRoute("");
-    });
+    map.on("move", positionOriginPulse);
+    map.on("zoom", positionOriginPulse);
   }
 
-  function bindInteractionPerformanceMode() {
-    const map = window.LifelineState.map;
-    ["dragstart", "rotatestart", "pitchstart", "zoomstart"].forEach((eventName) => {
-      map.on(eventName, () => setInteractionLightMode(true));
-    });
-    ["dragend", "rotateend", "pitchend", "zoomend", "moveend"].forEach((eventName) => {
-      map.on(eventName, () => setInteractionLightMode(false));
-    });
-  }
-
-  function setInteractionLightMode(enabled) {
+  function runIntro() {
     const state = window.LifelineState;
-    const map = state.map;
-    if (!map || state.isInteractionLight === enabled) return;
-    state.isInteractionLight = enabled;
-    PERFORMANCE_LAYER_IDS.forEach((layerId) => {
-      if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", enabled ? "none" : "visible");
+    const shell = document.querySelector("#app-shell");
+    const status = document.querySelector("#map-status");
+
+    shell.classList.add("is-intro", "origin-visible");
+    setIntroProgress(0);
+    updateLayerOpacity();
+
+    window.setTimeout(() => {
+      shell.classList.add("map-visible");
+      setIntroProgress(0.34);
+      updateLayerOpacity();
+      if (status) status.classList.add("is-hidden");
+    }, prefersReducedMotion() ? 40 : 520);
+
+    window.setTimeout(() => {
+      state.map.easeTo({
+        ...window.LifelineConfig.worldView,
+        duration: motionDuration(1700),
+        easing: (t) => 1 - Math.pow(1 - t, 3),
+        essential: true
+      });
+    }, prefersReducedMotion() ? 60 : 980);
+
+    window.setTimeout(() => {
+      setIntroProgress(1);
+      updateLayerOpacity();
+      shell.classList.add("places-visible");
+    }, prefersReducedMotion() ? 80 : 1700);
+
+    window.setTimeout(() => {
+      state.introDone = true;
+      shell.classList.remove("is-intro");
+      positionOriginPulse();
+    }, prefersReducedMotion() ? 120 : 2950);
+  }
+
+  function resetView() {
+    hidePlaceCard();
+    window.LifelineState.map.easeTo({
+      ...window.LifelineConfig.worldView,
+      duration: motionDuration(820),
+      essential: true
     });
-    if (map.getLayer("carto-base")) {
-      map.setPaintProperty("carto-base", "raster-opacity", enabled ? 0 : globeAwareRasterOpacity());
-    }
-    if (!enabled) {
-      setHoveredPlace("");
-      setHoveredRoute("");
-      updateModePaint();
-    }
   }
 
-  function globeAwareRasterOpacity() {
-    return window.LifelineState.projection === "globe" ? 0.006 : 0.016;
-  }
-
-  function bindPacificCameraClamp() {
-    const map = window.LifelineState.map;
-    map.on("moveend", () => {
-      if (window.LifelineState.projection !== "flat" || window.LifelineState.isTransitioningProjection || window.LifelineState.isIntroRunning) return;
-      const bounds = window.LifelineConfig.panBounds;
-      if (!bounds) return;
-      const center = map.getCenter();
-      const normalizedLng = normalizePacificLng(center.lng);
-      const clampedLng = Math.min(bounds[1][0], Math.max(bounds[0][0], normalizedLng));
-      const clampedLat = Math.min(bounds[1][1], Math.max(bounds[0][1], center.lat));
-      if (Math.abs(clampedLng - center.lng) > 0.001 || Math.abs(clampedLat - center.lat) > 0.001) {
-        map.easeTo({
-          center: [clampedLng, clampedLat],
-          duration: 220,
-          essential: true
-        });
-      }
-    });
-  }
-
-  function normalizePacificLng(lng) {
-    const bounds = window.LifelineConfig.panBounds || [[-180, -85], [180, 85]];
-    let value = lng;
-    while (value < bounds[0][0]) value += 360;
-    while (value > bounds[1][0]) value -= 360;
-    return value;
-  }
-
-  async function focusCountry(countryId) {
-    const state = window.LifelineState;
-    const view = window.LifelineConfig.countryView[countryId];
-    if (!view || state.isTransitioningProjection) return;
-    skipIntro();
-    const token = nextMotion();
-    hideTooltip();
-    state.focusCountryId = countryId;
-    state.focusRegionId = "";
-    state.activePlaceId = "";
-    updateFocusLayers();
-    window.LifelinePanels.closeCityCard();
-    showBackWorld();
-    await animateTo({ center: view.center, zoom: view.zoom, duration: motionDuration(1050), curve: 1.2 }, token, "fly");
-  }
-
-  async function focusPlace(placeId) {
+  function showPlace(placeId) {
     const state = window.LifelineState;
     const place = window.LifelineHelpers.getPlaceById(placeId);
-    if (!place || state.isTransitioningProjection) return;
-    skipIntro();
-    const token = nextMotion();
-    hideTooltip();
-    const countryView = window.LifelineConfig.countryView[place.countryId] || { center: [place.lng, place.lat], zoom: 3.2 };
-    const regionView = window.LifelineConfig.regionView[place.regionId] || { center: [place.lng, place.lat], zoom: 5.2 };
+    if (!place) return;
 
     state.activePlaceId = place.id;
-    state.focusCountryId = place.countryId;
-    state.focusRegionId = place.regionId;
-    updateFocusLayers();
-    window.LifelinePanels.closeCityCard();
-    showBackWorld();
+    setHoverPlace("");
+    updatePlacePaint();
 
-    if (state.map.getZoom() > countryView.zoom + 0.7) {
-      await animateTo({
-        center: state.map.getCenter().toArray(),
-        zoom: Math.max(countryView.zoom + 0.4, regionView.zoom - 1.25),
-        duration: motionDuration(380),
-        curve: 1
-      }, token, "ease");
-      if (token !== state.motionId) return;
-    }
-    await animateTo({ center: countryView.center, zoom: countryView.zoom, duration: motionDuration(720), curve: 1.18 }, token, "fly");
-    if (token !== state.motionId) return;
-    await animateTo({ center: regionView.center, zoom: regionView.zoom, duration: motionDuration(880), curve: 1.08 }, token, "fly");
-    if (token !== state.motionId) return;
-    updateFocusLayers();
-    window.LifelinePanels.renderCityCard(place);
-  }
-
-  async function backToWorld() {
-    const state = window.LifelineState;
-    if (state.isTransitioningProjection) return;
-    skipIntro();
-    const token = nextMotion();
-    hideTooltip();
-    state.focusCountryId = "";
-    state.focusRegionId = "";
-    state.activePlaceId = "";
-    updateFocusLayers();
-    window.LifelinePanels.closeCityCard();
-    document.querySelector("#back-world").hidden = true;
-    await animateTo({ ...window.LifelineConfig.worldView, duration: motionDuration(1050) }, token, "ease");
-  }
-
-  function setProjection(mode) {
-    const state = window.LifelineState;
-    if (state.isTransitioningProjection || state.projection === mode) return false;
-    skipIntro();
-    state.isTransitioningProjection = true;
-    document.querySelectorAll("[data-projection]").forEach((button) => {
-      button.classList.toggle("is-busy", true);
+    state.map.easeTo({
+      center: [place.lng, place.lat],
+      zoom: Math.max(state.map.getZoom(), 3.15),
+      duration: motionDuration(620),
+      essential: true
     });
-    const token = nextMotion();
-    runProjectionTransition(mode, token);
-    return true;
+
+    renderPlaceCard(place);
   }
 
-  async function runProjectionTransition(mode, token) {
+  function hidePlaceCard() {
     const state = window.LifelineState;
-    const type = mode === "globe" ? "globe" : "mercator";
-    const targetView = mode === "globe" ? window.LifelineConfig.globeView : window.LifelineConfig.worldView;
-    window.LifelinePanels.closeCityCard();
-    document.querySelector("#back-world").hidden = true;
-    state.focusCountryId = "";
-    state.focusRegionId = "";
     state.activePlaceId = "";
-    updateFocusLayers();
-    hideTooltip();
-    setVisualFade(0.36);
-    await animateTo({ ...window.LifelineConfig.worldView, duration: motionDuration(520) }, token, "ease", false);
-    if (token !== state.motionId) return finishProjectionTransition(mode);
-    await waitForIdleOrTimeout(180);
-    if (token !== state.motionId) return finishProjectionTransition(mode);
-    state.projection = mode;
-    state.map.setProjection({ type });
-    applyCameraBounds(mode);
-    updateProjectedSources();
-    updateRoutes();
-    updateModePaint();
-    await waitForIdleOrTimeout(260);
-    if (token !== state.motionId) return finishProjectionTransition(mode);
-    await animateTo({
-      center: targetView.center,
-      zoom: targetView.zoom,
-      pitch: 0,
-      bearing: 0,
-      duration: motionDuration(780)
-    }, token, "ease", false);
-    setVisualFade(1);
-    finishProjectionTransition(mode);
+    updatePlacePaint();
+    const card = document.querySelector("#place-card");
+    if (card) card.hidden = true;
   }
 
-  function setRouteMode(mode) {
-    if (window.LifelineState.isTransitioningProjection) return false;
-    window.LifelineState.routeMode = mode;
-    updateRoutes();
-    updateModePaint();
-    syncRouteButtons(mode);
-    return true;
+  function renderPlaceCard(place) {
+    const card = document.querySelector("#place-card");
+    if (!card) return;
+    card.hidden = false;
+    card.innerHTML = `
+      <p class="card-kicker">${escapeHtml(place.country || "")}</p>
+      <h2>${escapeHtml(window.LifelineHelpers.getPlaceLabel(place))}</h2>
+      <dl>
+        <div>
+          <dt>Region</dt>
+          <dd>${escapeHtml(place.adminRegion || place.country || "Unknown")}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>${escapeHtml(window.LifelineHelpers.firstVisitLabel(place))}</dd>
+        </div>
+      </dl>
+    `;
   }
 
-  function syncRouteButtons(mode) {
-    document.querySelectorAll("[data-route-mode]").forEach((button) => {
-      button.classList.toggle("is-active", button.dataset.routeMode === mode);
-    });
-  }
-
-  function updateRoutes() {
-    const collections = window.LifelineRoutes.buildRouteCollections(window.LifelineState.routeMode);
-    updateSource("routes-simple", collections.simple);
-    updateSource("routes-full", collections.full);
-  }
-
-  function updateProjectedSources() {
+  function setHoverPlace(placeId) {
     const state = window.LifelineState;
-    if (!state.map || !state.map.getSource("world-countries")) return;
-    updateSource("world-countries", projectedCollection(state.worldCountries));
-    updateSource("visited-countries", visitedCountriesCollection());
-    updateSource("places", placesCollection());
-    updateFocusLayers();
-  }
-
-  function applyCameraBounds(mode) {
-    const map = window.LifelineState.map;
-    if (!map || !map.setMaxBounds) return;
-    map.setMaxBounds(mode === "flat" ? window.LifelineConfig.panBounds : null);
-  }
-
-  function updateFocusLayers() {
-    const state = window.LifelineState;
-    const regionFeature = state.focusRegionId ? window.LifelineHelpers.featureById(state.adminRegions, state.focusRegionId) : null;
-    const territoryHint = regionFeature ? simplifyFeature(regionFeature, 0.045) : null;
-    const projectedHint = territoryHint ? projectedFeature(territoryHint) : null;
-    updateSource("admin-regions", projectedHint ? { type: "FeatureCollection", features: [projectedHint] } : emptyCollection());
-    updateCountryPaint();
-    const fade = state.layerFade || 1;
-    state.map.setPaintProperty("admin-regions-fill", "fill-opacity", adminFillOpacity(fade));
-    state.map.setPaintProperty("admin-regions-line", "line-opacity", adminLineOpacity(fade));
-    updateModePaint();
-  }
-
-  function setVisualFade(factor) {
-    const state = window.LifelineState;
-    const map = state.map;
-    state.layerFade = factor;
-    if (!map || !map.getLayer("routes-simple")) return;
-    updateModePaint();
-  }
-
-  function updateModePaint() {
-    const state = window.LifelineState;
-    const map = state.map;
-    const factor = state.layerFade || 1;
-    if (!map || !map.getLayer("routes-simple")) return;
-    updateCountryPaint();
-    const hasPlaces = state.routeMode !== "footprint";
-    const hasLine = state.routeMode === "line";
-    const hasJourneys = state.routeMode === "journeys";
-    updateBaseMapPaint();
-    map.setPaintProperty("admin-regions-fill", "fill-opacity", adminFillOpacity(factor));
-    map.setPaintProperty("admin-regions-line", "line-opacity", adminLineOpacity(factor));
-    map.setPaintProperty("routes-simple-shadow", "line-opacity", hasLine ? 0.32 * factor : 0);
-    map.setPaintProperty("routes-simple-glow", "line-opacity", hasLine ? 0.56 * factor : 0);
-    map.setPaintProperty("routes-simple", "line-opacity", hasLine ? 0.94 * factor : 0);
-    map.setPaintProperty("routes-full-shadow", "line-opacity", hasJourneys ? routeFullShadowOpacity() : 0);
-    map.setPaintProperty("routes-full", "line-opacity", hasJourneys ? routeFullGlowOpacity() : 0);
-    map.setPaintProperty("routes-full-core", "line-opacity", hasJourneys ? routeFullOpacity() : 0);
-    map.setPaintProperty("places-glow", "circle-opacity", hasPlaces ? 0.68 * factor : 0);
-    map.setPaintProperty("places-dot", "circle-opacity", hasPlaces ? factor : 0);
-    map.setPaintProperty("places-dot", "circle-stroke-opacity", hasPlaces ? factor : 0);
-    map.setPaintProperty("places-label-high", "text-opacity", labelHighOpacity());
-    map.setPaintProperty("places-label-normal", "text-opacity", labelNormalOpacity());
-    updateRouteReveal(state.routeReveal ?? 1);
-  }
-
-  function routeFullOpacity() {
-    const fade = window.LifelineState.layerFade || 1;
-    return ["*", fade, ["case", ["boolean", ["feature-state", "hover"], false], 0.98, ["coalesce", ["get", "routeOpacity"], 0.68]]];
-  }
-
-  function routeFullGlowOpacity() {
-    const fade = window.LifelineState.layerFade || 1;
-    return ["*", fade, ["case", ["boolean", ["feature-state", "hover"], false], 0.46, ["coalesce", ["get", "routeGlowOpacity"], 0.16]]];
-  }
-
-  function routeFullShadowOpacity() {
-    const fade = window.LifelineState.layerFade || 1;
-    return ["*", fade, ["case", ["boolean", ["feature-state", "hover"], false], 0.34, 0.2]];
-  }
-
-  function routeGradient(color, reveal) {
-    const stop = Math.max(0, Math.min(1, reveal));
-    return [
-      "interpolate",
-      ["linear"],
-      ["line-progress"],
-      0,
-      color,
-      Math.max(0, stop - 0.015),
-      color,
-      stop,
-      "rgba(255, 255, 255, 0)"
-    ];
-  }
-
-  function updateRouteReveal(reveal) {
-    const state = window.LifelineState;
-    const map = state.map;
-    state.routeReveal = reveal;
-    if (!map || !map.getLayer("routes-simple")) return;
-    map.setPaintProperty("routes-simple-shadow", "line-gradient", routeGradient(window.LifelineConfig.colors.routeShadow, reveal));
-    map.setPaintProperty("routes-simple-glow", "line-gradient", routeGradient(window.LifelineConfig.colors.routeGlow, reveal));
-    map.setPaintProperty("routes-simple", "line-gradient", routeGradient(window.LifelineConfig.colors.route, reveal));
-    map.setPaintProperty("routes-full-shadow", "line-gradient", routeGradient(window.LifelineConfig.colors.routeShadow, reveal));
-    map.setPaintProperty("routes-full", "line-gradient", routeGradient(window.LifelineConfig.colors.routeGlow, reveal));
-    map.setPaintProperty("routes-full-core", "line-gradient", routeGradient(window.LifelineConfig.colors.route, reveal));
-  }
-
-  function animateRouteReveal(duration = 720) {
-    const state = window.LifelineState;
-    cancelAnimationFrame(state.routeRevealFrame);
-    const start = performance.now();
-    const tick = (now) => {
-      const t = Math.min(1, (now - start) / motionDuration(duration));
-      updateRouteReveal(1 - Math.pow(1 - t, 3));
-      if (t < 1) state.routeRevealFrame = requestAnimationFrame(tick);
-    };
-    updateRouteReveal(0);
-    state.routeRevealFrame = requestAnimationFrame(tick);
-  }
-
-  function updateBaseMapPaint() {
-    const state = window.LifelineState;
-    const map = state.map;
-    if (!map || !map.getLayer("carto-base")) return;
-    if (state.projection === "globe") {
-      map.setPaintProperty("background", "background-color", "#326f7f");
-      map.setLayoutProperty("carto-base", "visibility", "none");
-      map.setPaintProperty("carto-base", "raster-opacity", 0);
-      map.setPaintProperty("carto-base", "raster-saturation", -0.78);
-      map.setPaintProperty("carto-base", "raster-contrast", -0.02);
-      map.setPaintProperty("carto-base", "raster-brightness-min", 0.1);
-      map.setPaintProperty("carto-base", "raster-brightness-max", 0.8);
-      if (map.getLayer("atlas-land-fill")) {
-      map.setPaintProperty("atlas-land-fill", "fill-color", "#efe1bf");
-      map.setPaintProperty("atlas-land-fill", "fill-opacity", 0.98);
-      map.setPaintProperty("atlas-land-warmth", "fill-opacity", 0.3);
-      map.setPaintProperty("atlas-country-line", "line-opacity", 0.22);
-      }
-      return;
-    }
-    map.setPaintProperty("background", "background-color", "#5f9dad");
-    map.setLayoutProperty("carto-base", "visibility", "visible");
-    map.setPaintProperty("carto-base", "raster-opacity", state.isInteractionLight ? 0 : globeAwareRasterOpacity());
-    map.setPaintProperty("carto-base", "raster-saturation", -0.86);
-    map.setPaintProperty("carto-base", "raster-contrast", -0.2);
-    map.setPaintProperty("carto-base", "raster-brightness-min", 0.14);
-    map.setPaintProperty("carto-base", "raster-brightness-max", 0.84);
-    if (map.getLayer("atlas-land-fill")) {
-      map.setPaintProperty("atlas-land-fill", "fill-color", "#efe1bf");
-      map.setPaintProperty("atlas-land-fill", "fill-opacity", 0.98);
-      map.setPaintProperty("atlas-land-warmth", "fill-opacity", 0.28);
-      map.setPaintProperty("atlas-country-line", "line-opacity", state.focusCountryId || state.focusRegionId ? 0.11 : 0.18);
-    }
-  }
-
-  function updateCountryPaint() {
-    const map = window.LifelineState.map;
-    if (!map || !map.getLayer("visited-countries-fill")) return;
-    map.setPaintProperty("visited-countries-fill", "fill-opacity", countryFillOpacity());
-    map.setPaintProperty("visited-countries-light", "fill-opacity", countryLightOpacity());
-    map.setPaintProperty("visited-countries-halo", "line-opacity", countryHaloOpacity());
-    map.setPaintProperty("visited-countries-halo", "line-width", countryHaloWidth());
-    map.setPaintProperty("visited-countries-line", "line-opacity", countryLineOpacity());
-    map.setPaintProperty("visited-countries-line", "line-width", countryLineWidth());
+    if (state.hoverPlaceId === placeId) return;
+    state.hoverPlaceId = placeId || "";
+    state.map.getCanvas().style.cursor = state.hoverPlaceId ? "pointer" : "";
+    updatePlacePaint();
   }
 
   function updatePlacePaint() {
     const map = window.LifelineState.map;
-    if (!map || !map.getLayer("places-glow")) return;
-    map.setPaintProperty("places-glow", "circle-radius", placeGlowRadius());
-    map.setPaintProperty("places-dot", "circle-radius", placeDotRadius());
-    map.setPaintProperty("places-label-high", "text-opacity", labelHighOpacity());
-    map.setPaintProperty("places-label-normal", "text-opacity", labelNormalOpacity());
+    if (!map || !map.getLayer("place-dot")) return;
+    map.setPaintProperty("place-dot", "circle-radius", placeDotRadius());
+    map.setPaintProperty("place-halo", "circle-radius", placeHaloRadius());
   }
 
-  function placeGlowRadius() {
-    const state = window.LifelineState;
-    return [
-      "case",
-      ["==", ["get", "id"], ["literal", state.activePlaceId || ""]], 15.5,
-      ["==", ["get", "id"], ["literal", state.hoverPlaceId || ""]], 14.2,
-      11.8
-    ];
+  function updateLayerOpacity() {
+    const map = window.LifelineState.map;
+    if (!map || !map.getLayer("place-dot")) return;
+    map.setPaintProperty("place-dot", "circle-opacity", introOpacity());
+    map.setPaintProperty("place-dot", "circle-stroke-opacity", introOpacity());
+    map.setPaintProperty("place-halo", "circle-opacity", introOpacity());
+    map.setPaintProperty("place-label", "text-opacity", ["*", introOpacity(), ["case", ["get", "origin"], 1, ["interpolate", ["linear"], ["zoom"], 2.3, 0.35, 4.6, 0.88]]]);
+  }
+
+  function introOpacity() {
+    const progress = window.LifelineState.introProgress || 0;
+    return ["case", ["get", "origin"], Math.max(0.25, progress), progress];
+  }
+
+  function setIntroProgress(value) {
+    window.LifelineState.introProgress = Math.max(0, Math.min(1, value));
   }
 
   function placeDotRadius() {
     const state = window.LifelineState;
     return [
       "case",
-      ["==", ["get", "id"], ["literal", state.activePlaceId || ""]], 6.7,
-      ["==", ["get", "id"], ["literal", state.hoverPlaceId || ""]], 5.9,
-      5.05
+      ["==", ["get", "id"], ["literal", state.activePlaceId || ""]], 7.6,
+      ["==", ["get", "id"], ["literal", state.hoverPlaceId || ""]], 6.8,
+      ["get", "origin"], 6.2,
+      4.9
     ];
   }
 
-  function labelHighOpacity() {
-    return 0;
-  }
-
-  function labelNormalOpacity() {
-    return 0;
-  }
-
-  function countryFillOpacity() {
+  function placeHaloRadius() {
     const state = window.LifelineState;
-    const focusId = state.focusCountryId || "";
-    const hoverId = state.hoverCountryId || "";
-    const fade = (state.layerFade || 1) * (state.projection === "globe" ? 0.82 : 1);
-    const base = state.focusRegionId ? 0.34 : 0.76;
-    return ["*", fade, [
-      "case",
-      ["==", ["get", "id"], ["literal", focusId]], state.focusRegionId ? 0.48 : 0.86,
-      ["==", ["get", "id"], ["literal", hoverId]], 0.84,
-      base
-    ]];
-  }
-
-  function countryLightOpacity() {
-    const state = window.LifelineState;
-    const focusId = state.focusCountryId || "";
-    const hoverId = state.hoverCountryId || "";
-    const fade = (state.layerFade || 1) * (state.projection === "globe" ? 0.68 : 1);
-    const base = state.focusRegionId ? 0.12 : 0.38;
-    return ["*", fade, [
-      "case",
-      ["==", ["get", "id"], ["literal", focusId]], state.focusRegionId ? 0.22 : 0.48,
-      ["==", ["get", "id"], ["literal", hoverId]], 0.45,
-      base
-    ]];
-  }
-
-  function countryHaloOpacity() {
-    const state = window.LifelineState;
-    const focusId = state.focusCountryId || "";
-    const hoverId = state.hoverCountryId || "";
-    const fade = (state.layerFade || 1) * (state.projection === "globe" ? 0.58 : 1);
-    const base = state.focusRegionId ? 0.22 : 0.72;
-    return ["*", fade, [
-      "case",
-      ["==", ["get", "id"], ["literal", focusId]], state.focusRegionId ? 0.32 : 0.82,
-      ["==", ["get", "id"], ["literal", hoverId]], 0.78,
-      base
-    ]];
-  }
-
-  function countryHaloWidth() {
-    const state = window.LifelineState;
-    const focusId = state.focusCountryId || "";
-    const hoverId = state.hoverCountryId || "";
     return [
       "case",
-      ["==", ["get", "id"], ["literal", focusId]], 8.2,
-      ["==", ["get", "id"], ["literal", hoverId]], 7,
-      5.4
+      ["==", ["get", "id"], ["literal", state.activePlaceId || ""]], 23,
+      ["==", ["get", "id"], ["literal", state.hoverPlaceId || ""]], 19,
+      ["get", "origin"], 18,
+      13
     ];
   }
 
-  function countryLineOpacity() {
-    const state = window.LifelineState;
-    const focusId = state.focusCountryId || "";
-    const hoverId = state.hoverCountryId || "";
-    const fade = (state.layerFade || 1) * (state.projection === "globe" ? 0.68 : 1);
-    const base = state.focusRegionId ? 0.28 : 0.66;
-    return ["*", fade, [
-      "case",
-      ["==", ["get", "id"], ["literal", focusId]], state.focusRegionId ? 0.42 : 0.76,
-      ["==", ["get", "id"], ["literal", hoverId]], 0.74,
-      base
-    ]];
+  function placesCollection() {
+    const originId = window.LifelineConfig.originPlaceId;
+    return {
+      type: "FeatureCollection",
+      features: window.LifelineHelpers.visiblePlaces().map((place, index) => ({
+        type: "Feature",
+        id: place.id,
+        properties: {
+          id: place.id,
+          label: window.LifelineHelpers.getPlaceLabel(place),
+          countryId: place.countryId,
+          origin: place.id === originId,
+          order: index
+        },
+        geometry: {
+          type: "Point",
+          coordinates: [place.lng, place.lat]
+        }
+      }))
+    };
   }
 
-  function countryLineWidth() {
-    const state = window.LifelineState;
-    const focusId = state.focusCountryId || "";
-    const hoverId = state.hoverCountryId || "";
-    return [
-      "case",
-      ["==", ["get", "id"], ["literal", focusId]], 0.95,
-      ["==", ["get", "id"], ["literal", hoverId]], 0.8,
-      0.55
-    ];
+  function visitedCountriesCollection() {
+    const ids = window.LifelineHelpers.visitedCountryIds();
+    return {
+      type: "FeatureCollection",
+      features: (window.LifelineState.visitedCountries.features || []).filter((feature) => ids.has(feature.properties.id))
+    };
   }
 
-  function adminFillOpacity(fade) {
-    const state = window.LifelineState;
-    if (state.projection === "globe" || !state.focusRegionId) return 0;
-    return 0.34 * fade;
-  }
-
-  function adminLineOpacity(fade) {
-    const state = window.LifelineState;
-    if (state.projection === "globe" || !state.focusRegionId) return 0;
-    return 0.62 * fade;
-  }
-
-  function updateSource(id, data) {
-    const source = window.LifelineState.map.getSource(id);
-    if (source) source.setData(data);
+  function simplifyCollection(collection, tolerance) {
+    return {
+      ...collection,
+      features: (collection.features || []).map((feature) => simplifyFeature(feature, tolerance))
+    };
   }
 
   function simplifyFeature(feature, tolerance) {
     if (!feature || !feature.geometry) return feature;
-    const geometry = feature.geometry;
     return {
       ...feature,
       geometry: {
-        ...geometry,
-        coordinates: simplifyGeometryCoordinates(geometry.coordinates, geometry.type, tolerance)
+        ...feature.geometry,
+        coordinates: simplifyCoordinates(feature.geometry.coordinates, feature.geometry.type, tolerance)
       }
     };
   }
 
-  function simplifyGeometryCoordinates(coordinates, type, tolerance) {
+  function simplifyCoordinates(coordinates, type, tolerance) {
     if (type === "Polygon") return coordinates.map((ring) => simplifyRing(ring, tolerance));
-    if (type === "MultiPolygon") {
-      return coordinates.map((polygon) => polygon.map((ring) => simplifyRing(ring, tolerance)));
-    }
+    if (type === "MultiPolygon") return coordinates.map((polygon) => polygon.map((ring) => simplifyRing(ring, tolerance)));
     return coordinates;
   }
 
   function simplifyRing(ring, tolerance) {
-    if (!Array.isArray(ring) || ring.length <= 12) return ring;
-    const isClosed = sameCoord(ring[0], ring[ring.length - 1]);
-    const body = isClosed ? ring.slice(0, -1) : ring.slice();
+    if (!Array.isArray(ring) || ring.length <= 10) return ring;
+    const closed = sameCoord(ring[0], ring[ring.length - 1]);
+    const body = closed ? ring.slice(0, -1) : ring;
     const simplified = rdp(body, tolerance);
-    if (isClosed && simplified.length) simplified.push(simplified[0]);
+    if (closed && simplified.length) simplified.push(simplified[0]);
     return simplified.length >= 4 ? simplified : ring;
   }
 
   function rdp(points, tolerance) {
     if (points.length <= 2) return points;
-    let maxDistance = 0;
     let index = 0;
+    let maxDistance = 0;
     const end = points.length - 1;
     for (let i = 1; i < end; i += 1) {
       const distance = perpendicularDistance(points[i], points[0], points[end]);
@@ -934,7 +424,7 @@
   function perpendicularDistance(point, start, end) {
     const dx = end[0] - start[0];
     const dy = end[1] - start[1];
-    if (dx === 0 && dy === 0) return Math.hypot(point[0] - start[0], point[1] - start[1]);
+    if (!dx && !dy) return Math.hypot(point[0] - start[0], point[1] - start[1]);
     return Math.abs(dy * point[0] - dx * point[1] + end[0] * start[1] - end[1] * start[0]) / Math.hypot(dx, dy);
   }
 
@@ -942,246 +432,39 @@
     return Array.isArray(a) && Array.isArray(b) && a[0] === b[0] && a[1] === b[1];
   }
 
-  function projectedCollection(collection) {
-    if (!collection || !collection.features) return collection;
-    return {
-      ...collection,
-      features: collection.features.map((feature) => projectedFeature(feature))
-    };
-  }
-
-  function projectedFeature(feature) {
-    if (!feature || !feature.geometry) return feature;
-    return {
-      ...feature,
-      geometry: {
-        ...feature.geometry,
-        coordinates: projectCoordinates(feature.geometry.coordinates)
-      }
-    };
-  }
-
-  function projectCoordinates(coordinates) {
-    if (!Array.isArray(coordinates)) return coordinates;
-    if (typeof coordinates[0] === "number") {
-      return [projectLng(coordinates[0]), coordinates[1], ...coordinates.slice(2)];
-    }
-    return coordinates.map((item) => projectCoordinates(item));
-  }
-
-  function projectLng(lng) {
-    if (window.LifelineState.projection === "globe") return normalizeNaturalLng(lng);
-    return normalizePacificLng(lng);
-  }
-
-  function normalizeNaturalLng(lng) {
-    let value = lng;
-    while (value < -180) value += 360;
-    while (value > 180) value -= 360;
-    return value;
-  }
-
-  function placesCollection() {
-    return {
-      type: "FeatureCollection",
-      features: window.LifelineHelpers.visiblePlaces().map((place) => ({
-        type: "Feature",
-        properties: {
-          id: place.id,
-          displayName: window.LifelineHelpers.getPlaceLabel(place),
-          labelPriority: place.labelPriority || "normal",
-          countryId: place.countryId,
-          regionId: place.regionId
-        },
-        geometry: { type: "Point", coordinates: [projectLng(place.lng), place.lat] }
-      }))
-    };
-  }
-
-  function visitedCountriesCollection() {
-    const visitedIds = new Set(window.LifelineHelpers.visiblePlaces().map((place) => place.countryId).filter(Boolean));
-    return {
-      type: "FeatureCollection",
-      features: (window.LifelineState.countries.features || [])
-        .filter((feature) => visitedIds.has(feature.properties.id))
-        .map((feature) => projectedFeature(feature))
-    };
-  }
-
-  function emptyCollection() {
-    return { type: "FeatureCollection", features: [] };
-  }
-
-  function showBackWorld() {
-    document.querySelector("#back-world").hidden = false;
-  }
-
-  function runIntroSequence() {
-    const state = window.LifelineState;
-    const shell = document.querySelector("#lifeline-shell");
-    state.isIntroRunning = true;
-    shell.classList.add("is-intro");
-    shell.classList.remove("intro-title-visible", "intro-map-visible");
-    setRouteMode("footprint");
-    if (prefersReducedMotion()) {
-      skipIntro();
-      return;
-    }
-    updateRouteReveal(0);
-    state.map.jumpTo({ center: [150, 6], zoom: 1.04, pitch: 0, bearing: 0 });
-    setVisualFade(0);
-    requestAnimationFrame(() => shell.classList.add("intro-title-visible"));
-    state.map.easeTo({
-      ...window.LifelineConfig.worldView,
-      duration: motionDuration(4200),
-      easing: (t) => 1 - Math.pow(1 - t, 3),
-      essential: true
-    });
-    state.introTimers = [
-      setTimeout(() => {
-        shell.classList.add("intro-map-visible");
-      }, 420),
-      setTimeout(() => {
-        setVisualFade(1);
-      }, 760),
-      setTimeout(() => {
-        setRouteMode("line");
-        animateRouteReveal(1250);
-      }, 2200),
-      setTimeout(() => {
-        state.isIntroRunning = false;
-        setRouteMode("line");
-        shell.classList.remove("is-intro", "intro-title-visible", "intro-map-visible");
-      }, 4300)
-    ];
-  }
-
-  function skipIntro() {
-    const state = window.LifelineState;
-    if (!state.isIntroRunning) return;
-    const shell = document.querySelector("#lifeline-shell");
-    (state.introTimers || []).forEach((timer) => clearTimeout(timer));
-    state.introTimers = [];
-    state.isIntroRunning = false;
-    state.map.stop();
-    cancelAnimationFrame(state.routeRevealFrame);
-    setRouteMode("line");
-    updateRouteReveal(1);
-    setVisualFade(1);
-    shell.classList.remove("is-intro", "intro-title-visible", "intro-map-visible");
-    state.map.easeTo({ ...window.LifelineConfig.worldView, duration: motionDuration(160), essential: true });
-  }
-
-  function bindIntroInterrupts() {
+  function positionOriginPulse() {
+    const pulse = document.querySelector("#origin-pulse");
     const map = window.LifelineState.map;
-    const skipForUser = (event) => {
-      if (event && event.originalEvent) skipIntro();
-    };
-    map.on("dragstart", skipForUser);
-    map.on("zoomstart", skipForUser);
-    map.on("rotatestart", skipForUser);
-    map.on("pitchstart", skipForUser);
-    map.getCanvas().addEventListener("pointerdown", skipIntro);
+    if (!pulse || !map) return;
+    const origin = window.LifelineHelpers.getPlaceById(window.LifelineConfig.originPlaceId);
+    if (!origin) return;
+    const point = map.project([origin.lng, origin.lat]);
+    pulse.style.transform = `translate(${point.x}px, ${point.y}px) translate(-50%, -50%)`;
   }
 
-  function nextMotion() {
-    const state = window.LifelineState;
-    state.motionId += 1;
-    state.map.stop();
-    return state.motionId;
-  }
-
-  function animateTo(options, token, method = "ease", stopBefore = true) {
-    const state = window.LifelineState;
-    if (token !== state.motionId) return Promise.resolve(false);
-    if (stopBefore) state.map.stop();
-    const payload = { ...options, essential: true };
-    if (prefersReducedMotion()) payload.duration = Math.min(180, payload.duration || 180);
-    const animation = method === "fly" ? "flyTo" : "easeTo";
-    state.map[animation](payload);
-    return waitForMoveEnd(token);
-  }
-
-  function waitForMoveEnd(token) {
-    const state = window.LifelineState;
-    return new Promise((resolve) => {
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
-        state.map.off("moveend", finish);
-        resolve(token === state.motionId);
-      };
-      state.map.once("moveend", finish);
-      setTimeout(finish, prefersReducedMotion() ? 240 : 1800);
-    });
-  }
-
-  function waitForIdleOrTimeout(timeout) {
-    const map = window.LifelineState.map;
-    return new Promise((resolve) => {
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
-        map.off("idle", finish);
-        resolve();
-      };
-      map.once("idle", finish);
-      setTimeout(finish, timeout);
-    });
-  }
-
-  function finishProjectionTransition(mode) {
-    const state = window.LifelineState;
-    state.isTransitioningProjection = false;
-    state.projection = mode;
-    setVisualFade(1);
-    document.querySelectorAll("[data-projection]").forEach((button) => {
-      button.classList.toggle("is-busy", false);
-      button.classList.toggle("is-active", button.dataset.projection === mode);
-    });
+  function onceMapEvent(map, eventName) {
+    return new Promise((resolve) => map.once(eventName, resolve));
   }
 
   function motionDuration(value) {
-    return prefersReducedMotion() ? Math.min(value, 180) : value;
+    return prefersReducedMotion() ? Math.min(value, 120) : value;
   }
 
   function prefersReducedMotion() {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
-  function setHoveredRoute(routeId) {
-    const state = window.LifelineState;
-    if (state.hoveredRouteId === routeId) return;
-    if (state.hoveredRouteId) {
-      state.map.setFeatureState({ source: "routes-full", id: state.hoveredRouteId }, { hover: false });
-    }
-    state.hoveredRouteId = routeId || "";
-    if (state.hoveredRouteId) {
-      state.map.setFeatureState({ source: "routes-full", id: state.hoveredRouteId }, { hover: true });
-    }
-  }
-
-  function setHoveredPlace(placeId) {
-    const state = window.LifelineState;
-    if (state.hoverPlaceId === placeId) return;
-    state.hoverPlaceId = placeId || "";
-    updatePlacePaint();
-  }
-
-  function hideTooltip() {
-    return;
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 
   window.LifelineMap = {
     init,
-    focusPlace,
-    focusCountry,
-    backToWorld,
-    setProjection,
-    setRouteMode,
-    skipIntro,
-    hideTooltip
+    resetView
   };
 })();

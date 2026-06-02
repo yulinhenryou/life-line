@@ -1,33 +1,58 @@
 .maplibregl-canvas {
-  outline: 0;
+  outline: none;
 }
 
 .maplibregl-control-container {
   display: none;
 }
 
-.map-canvas::after {
-  content: "";
+.origin-pulse {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  opacity: 0;
   pointer-events: none;
-  background:
-    radial-gradient(circle at 57% 46%, rgba(255, 218, 125, 0.26), transparent 23%),
-    radial-gradient(circle at 24% 62%, rgba(21, 82, 104, 0.28), transparent 34%),
-    radial-gradient(circle at 82% 34%, rgba(232, 178, 82, 0.18), transparent 25%),
-    linear-gradient(180deg, rgba(255, 247, 221, 0.2), rgba(22, 69, 90, 0.25)),
-    repeating-linear-gradient(32deg, rgba(255, 255, 255, 0.036) 0, rgba(255, 255, 255, 0.036) 1px, transparent 1px, transparent 5px);
-  mix-blend-mode: overlay;
 }
 
-.map-canvas::before {
+.origin-pulse::before,
+.origin-pulse::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 50% 48%, transparent 0 46%, rgba(14, 45, 61, 0.28) 100%),
-    radial-gradient(circle at 52% 48%, rgba(255, 220, 132, 0.12), transparent 42%);
-  mix-blend-mode: multiply;
+  border-radius: inherit;
+}
+
+.origin-pulse::before {
+  background: #111827;
+  transform: scale(0.42);
+  box-shadow: 0 0 24px rgba(17, 24, 39, 0.24);
+}
+
+.origin-pulse::after {
+  border: 1px solid rgba(17, 24, 39, 0.35);
+  animation: originPulse 1800ms cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.app-shell.origin-visible .origin-pulse {
+  opacity: 1;
+  transition: opacity 420ms ease;
+}
+
+.app-shell.places-visible .origin-pulse {
+  opacity: 0;
+}
+
+@keyframes originPulse {
+  0% {
+    opacity: 0.78;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.8);
+  }
 }
