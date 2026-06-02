@@ -16,7 +16,8 @@
       maxZoom: config.maxZoom,
       minZoom: 0.75,
       attributionControl: false,
-      renderWorldCopies: true
+      renderWorldCopies: false,
+      maxBounds: config.panBounds
     });
 
     state.map.on("error", (event) => {
@@ -45,7 +46,7 @@
   function addSourcesAndLayers() {
     const state = window.LifelineState;
     const map = state.map;
-    map.addSource("world-countries", { type: "geojson", data: state.worldCountries });
+    map.addSource("world-countries", { type: "geojson", data: projectedCollection(state.worldCountries) });
     map.addSource("visited-countries", { type: "geojson", data: visitedCountriesCollection() });
     map.addSource("admin-regions", { type: "geojson", data: emptyCollection() });
     map.addSource("places", { type: "geojson", data: placesCollection() });
@@ -382,7 +383,7 @@
   function bindPacificCameraClamp() {
     const map = window.LifelineState.map;
     map.on("moveend", () => {
-      if (window.LifelineState.isTransitioningProjection || window.LifelineState.isIntroRunning) return;
+      if (window.LifelineState.projection !== "flat" || window.LifelineState.isTransitioningProjection || window.LifelineState.isIntroRunning) return;
       const bounds = window.LifelineConfig.panBounds;
       if (!bounds) return;
       const center = map.getCenter();
@@ -400,9 +401,10 @@
   }
 
   function normalizePacificLng(lng) {
+    const bounds = window.LifelineConfig.panBounds || [[-180, -85], [180, 85]];
     let value = lng;
-    while (value < -40) value += 360;
-    while (value > 320) value -= 360;
+    while (value < bounds[0][0]) value += 360;
+    while (value > bounds[1][0]) value -= 360;
     return value;
   }
 
@@ -502,6 +504,8 @@
     if (token !== state.motionId) return finishProjectionTransition(mode);
     state.projection = mode;
     state.map.setProjection({ type });
+    applyCameraBounds(mode);
+    updateProjectedSources();
     updateRoutes();
     updateModePaint();
     await waitForIdleOrTimeout(260);
@@ -538,11 +542,27 @@
     updateSource("routes-full", collections.full);
   }
 
+  function updateProjectedSources() {
+    const state = window.LifelineState;
+    if (!state.map || !state.map.getSource("world-countries")) return;
+    updateSource("world-countries", projectedCollection(state.worldCountries));
+    updateSource("visited-countries", visitedCountriesCollection());
+    updateSource("places", placesCollection());
+    updateFocusLayers();
+  }
+
+  function applyCameraBounds(mode) {
+    const map = window.LifelineState.map;
+    if (!map || !map.setMaxBounds) return;
+    map.setMaxBounds(mode === "flat" ? window.LifelineConfig.panBounds : null);
+  }
+
   function updateFocusLayers() {
     const state = window.LifelineState;
     const regionFeature = state.focusRegionId ? window.LifelineHelpers.featureById(state.adminRegions, state.focusRegionId) : null;
     const territoryHint = regionFeature ? simplifyFeature(regionFeature, 0.045) : null;
-    updateSource("admin-regions", territoryHint ? { type: "FeatureCollection", features: [territoryHint] } : emptyCollection());
+    const projectedHint = territoryHint ? projectedFeature(territoryHint) : null;
+    updateSource("admin-regions", projectedHint ? { type: "FeatureCollection", features: [projectedHint] } : emptyCollection());
     updateCountryPaint();
     const fade = state.layerFade || 1;
     state.map.setPaintProperty("admin-regions-fill", "fill-opacity", adminFillOpacity(fade));
@@ -874,6 +894,45 @@
     return Array.isArray(a) && Array.isArray(b) && a[0] === b[0] && a[1] === b[1];
   }
 
+  function projectedCollection(collection) {
+    if (!collection || !collection.features) return collection;
+    return {
+      ...collection,
+      features: collection.features.map((feature) => projectedFeature(feature))
+    };
+  }
+
+  function projectedFeature(feature) {
+    if (!feature || !feature.geometry) return feature;
+    return {
+      ...feature,
+      geometry: {
+        ...feature.geometry,
+        coordinates: projectCoordinates(feature.geometry.coordinates)
+      }
+    };
+  }
+
+  function projectCoordinates(coordinates) {
+    if (!Array.isArray(coordinates)) return coordinates;
+    if (typeof coordinates[0] === "number") {
+      return [projectLng(coordinates[0]), coordinates[1], ...coordinates.slice(2)];
+    }
+    return coordinates.map((item) => projectCoordinates(item));
+  }
+
+  function projectLng(lng) {
+    if (window.LifelineState.projection === "globe") return normalizeNaturalLng(lng);
+    return normalizePacificLng(lng);
+  }
+
+  function normalizeNaturalLng(lng) {
+    let value = lng;
+    while (value < -180) value += 360;
+    while (value > 180) value -= 360;
+    return value;
+  }
+
   function placesCollection() {
     return {
       type: "FeatureCollection",
@@ -886,7 +945,7 @@
           countryId: place.countryId,
           regionId: place.regionId
         },
-        geometry: { type: "Point", coordinates: [place.lng, place.lat] }
+        geometry: { type: "Point", coordinates: [projectLng(place.lng), place.lat] }
       }))
     };
   }
@@ -895,7 +954,9 @@
     const visitedIds = new Set(window.LifelineHelpers.visiblePlaces().map((place) => place.countryId).filter(Boolean));
     return {
       type: "FeatureCollection",
-      features: (window.LifelineState.countries.features || []).filter((feature) => visitedIds.has(feature.properties.id))
+      features: (window.LifelineState.countries.features || [])
+        .filter((feature) => visitedIds.has(feature.properties.id))
+        .map((feature) => projectedFeature(feature))
     };
   }
 
