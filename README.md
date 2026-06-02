@@ -1,16 +1,17 @@
 # LIFELINE
 
-LIFELINE is a personal interactive map that turns meaningful places, visited regions, and life routes into a quiet visual atlas.
+LIFELINE is a personal world map for recording the places visited across a lifetime.
 
-It is designed as a symbolic life map, not a travel checklist or navigation tool. The focus is on memory, movement, and place.
+The project is being rebuilt around one clear idea: a quiet, precise, extensible flat map. Cities are the primary record; visited countries are highlighted automatically from those city records.
 
-## What It Shows
+## Current Direction
 
-- Places that matter
-- Visited countries and regions
-- Life movement routes between cities
-- Flat and globe map views
-- Footprint, lifeline, and journey display modes
+- Clean flat world map
+- City-level visited-place records
+- Automatic visited-country highlighting
+- Changsha as the origin point
+- Minimal UI focused on the map
+- Static deployment through GitHub Pages
 
 ## Built With
 
@@ -18,7 +19,7 @@ It is designed as a symbolic life map, not a travel checklist or navigation tool
 - CSS
 - JavaScript
 - MapLibre GL JS
-- Lightweight local GeoJSON data
+- Local GeoJSON boundary data
 
 No build step is required.
 
@@ -34,32 +35,32 @@ Then open:
 http://localhost:8000
 ```
 
+## Main Data
+
+```text
+data/places.js
+```
+
+Each place stores a city, coordinates, country metadata, and future-ready visit fields.
+
 ## Project Structure
 
 ```text
-data/      places, journeys, and map boundary data
-src/       map logic and interaction code
-styles/    visual styling and responsive layout
+data/      place records and GeoJSON boundaries
+src/       map initialization, helpers, and app state
+styles/    visual system and responsive shell
 vendor/    local MapLibre files
 index.html app entry point
 ```
 
-## Editing The Map
+## Future Additions
 
-Main content lives in:
-
-- `data/places.js`
-- `data/journeys.js`
-
-Map configuration lives in:
-
-- `src/config.js`
-
-## Deployment
-
-The project is static and can be deployed directly with GitHub Pages from the repository root.
+- Search-based place adding
+- Memory and note fields
+- Photos or emotional tags
+- Mobile-specific layout refinements
 
 ## Credits
 
 - Map rendering: [MapLibre GL JS](https://maplibre.org/)
-- Base map tiles: [CARTO](https://carto.com/) and OpenStreetMap contributors
+- Boundary and map data: OpenStreetMap contributors and local GeoJSON sources
